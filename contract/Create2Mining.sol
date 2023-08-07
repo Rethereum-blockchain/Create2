@@ -35,14 +35,12 @@ contract Create2Mining {
     }
 
 
-    // Create a function to get a specific bid by index
     function getBid(uint256 index) public view returns (address addr, uint256 value, bytes32 hash, uint8 zeros) {
         require(index < bids.length);
         Bid memory bid = bids[index];
         return (bid.bidder, bid.amount, bid.hash, bid.zeros);
     }
 
-    // Create a function to submit a soltion to the mining challenge
     function submitSolution(uint256 index, bytes32 solution) public {
         require(index < bids.length);
         Bid memory bid = bids[index];
