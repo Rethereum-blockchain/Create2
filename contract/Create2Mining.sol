@@ -10,7 +10,8 @@ contract Create2Mining {
     address public constant CREATE2_FACTORY = 0x00000000000e974Fb8B2985Eb2fda6Dd13b90ACb;
 
     event NewBid(address indexed bidder, uint256 amount, bytes32 hash, uint8 zeros);
-    event NewSolution(address indexed bidder, bytes32 hash, uint8 zeros, bytes32 solution);
+    event NewSolution(address indexed bidder, address indexed miner, bytes32 hash, bytes32 solution, address addr);
+    event BidWithdrawn(address indexed bidder, uint256 amount, bytes32 hash, uint8 zeros);
 
     struct Bid {
         address bidder;
@@ -21,7 +22,6 @@ contract Create2Mining {
     }
 
     Bid[] public bids;
-
 
     // @dev Submit a bid for a solution to mined.
     // @param hash The hash of the init code to be mined.
@@ -34,6 +34,18 @@ contract Create2Mining {
 
         bids.push(Bid(msg.sender, msg.value, hash, zeros, ""));
         emit NewBid(msg.sender, msg.value, hash, zeros);
+    }
+
+    // @dev Withdraw a bid.
+    // @param index The index of the bid to withdraw.
+    function withdrawBid(uint256 index) public {
+        require(index < bids.length);
+        Bid memory bid = bids[index];
+        require(bid.bidder == msg.sender, "Only the bidder can withdraw their bid.");
+        require(bid.solution == "", "Cannot withdraw a bid that has a solution.");
+        payable(msg.sender).transfer(bid.amount);
+        delete bids[index];
+        emit BidWithdrawn(msg.sender, bid.amount, bid.hash, bid.zeros);
     }
 
 
@@ -50,7 +62,7 @@ contract Create2Mining {
     }
 
 
-    // @dev Get the number of bids.
+    // @dev Claim the reward for a given bid.
     // @param index The index of the bid to provide the solution for.
     // @param solution The solution to the init code hash.
     function submitSolution(uint256 index, bytes32 solution) public {
@@ -67,7 +79,7 @@ contract Create2Mining {
 
         require(requiredZeros == 0, "Solution does not meet the required difficulty.");
         bid.solution = solution;
-        emit NewSolution(bid.bidder, bid.hash, bid.zeros, solution);
+        emit NewSolution(bid.bidder, msg.sender, bid.hash, solution, addr);
         payable(msg.sender).transfer(bid.amount);
     }
 
