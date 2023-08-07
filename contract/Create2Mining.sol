@@ -6,9 +6,11 @@ interface ImmutableCreate2Factory {
 }
 
 contract Create2Mining {
+    uint256 public constant MINIMUM_BID = 1 ether;
+    address public constant CREATE2_FACTORY = 0xd9145CCE52D386f254917e481eB44e9943F39138;
 
-    uint256 public constant MINIMUM_BID = 10 ether;
-    address public constant CREATE2_FACTORY = 0x00000000000e974Fb8B2985Eb2fda6Dd13b90ACb;
+    event NewBid(address indexed bidder, uint256 amount, bytes32 hash, uint8 zeros);
+    event NewSolution(address indexed bidder, bytes32 hash, uint8 zeros, bytes32 solution);
 
     struct Bid {
         address bidder;
@@ -20,48 +22,72 @@ contract Create2Mining {
 
     Bid[] public bids;
 
+
+    // @dev Submit a bid for a solution to mined.
+    // @param hash The hash of the init code to be mined.
+    // @param zeros The number of leading zeros required in the solution.
+    // @payable The amount of the bid.
     function submitBid(bytes32 hash, uint8 zeros) public payable {
         require(hash != 0);
         require(zeros > 0);
-
-        if (zeros > 4) {
-            uint256 amount = MINIMUM_BID * (2 ** (zeros - 4));
-            require(msg.value >= amount);
-        } else {
-            require(msg.value >= MINIMUM_BID);
-        }
+        require(msg.value >= expectedFee(zeros), "Insufficient bid amount.");
 
         bids.push(Bid(msg.sender, msg.value, hash, zeros, ""));
+        emit NewBid(msg.sender, msg.value, hash, zeros);
     }
 
 
+    // @dev Get a specific bid.
+    // @param index The index of the bid to get.
+    // @return addr The address of the bidder.
+    // @return value The amount of the bid.
+    // @return hash The hash of the init code to be mined.
+    // @return zeros The number of leading zeros required in the solution.
     function getBid(uint256 index) public view returns (address addr, uint256 value, bytes32 hash, uint8 zeros) {
         require(index < bids.length);
         Bid memory bid = bids[index];
         return (bid.bidder, bid.amount, bid.hash, bid.zeros);
     }
 
+
+    // @dev Get the number of bids.
+    // @param index The index of the bid to provide the solution for.
+    // @param solution The solution to the init code hash.
     function submitSolution(uint256 index, bytes32 solution) public {
         require(index < bids.length);
-        Bid memory bid = bids[index];
+        Bid storage bid = bids[index];
+        require(bid.solution == "", "Solution already submitted.");
         require((address(bytes20(solution)) == bid.bidder), "Invalid solution - first 20 bytes of the salt must match bidder address.");
 
-        address factory = address(CREATE2_FACTORY);
-        address addr = ImmutableCreate2Factory(factory).findCreate2AddressViaHash(solution, bid.hash);
+        address addr = addressViaHash(solution, bid.hash);
         require(addr != address(0));
 
-        uint8 solutionZeros = 0;
-        for (uint8 i = 0; i < 20; i++) {
-            if (uint8(solution[i]) >> 4 == 0) {
-                solutionZeros++;
-            } else {
-                break;
-            }
-        }
+        uint8 shift = 160 - (4 * bid.zeros);
+        bytes20 requiredZeros = bytes20(uint160(addr) >> shift);
 
-        require(solutionZeros >= bid.zeros, "Solution does not meet the required difficulty.");
+        require(requiredZeros == 0, "Solution does not meet the required difficulty.");
         bid.solution = solution;
-
+        emit NewSolution(bid.bidder, bid.hash, bid.zeros, solution);
         payable(msg.sender).transfer(bid.amount);
+    }
+
+    // @dev Confirm the salt and init code hash for a given address.
+    // @param salt The salt used to deploy the contract.
+    // @param initCodeHash The hash of the init code used to deploy the contract.
+    // @return deploymentAddress The expected address of the deployed contract.
+    function addressViaHash(bytes32 salt, bytes32 initCodeHash) public view returns (address deploymentAddress) {
+        address factory = address(CREATE2_FACTORY);
+        return ImmutableCreate2Factory(factory).findCreate2AddressViaHash(salt, initCodeHash);
+    }
+
+    // @dev Calculate the expected fee for a given number of leading zeros.
+    // @param zeros The number of leading zeros required in the solution.
+    // @return The expected fee for the given number of leading zeros.
+    function expectedFee(uint8 zeros) public pure returns (uint256) {
+        if (zeros > 4) {
+            return MINIMUM_BID * (2 ** (zeros - 4));
+        } else {
+            return MINIMUM_BID;
+        }
     }
 }
