@@ -6,8 +6,8 @@ interface ImmutableCreate2Factory {
 }
 
 contract Create2Mining {
-    uint256 public constant MINIMUM_BID = 1 ether;
-    address public constant CREATE2_FACTORY = 0xd9145CCE52D386f254917e481eB44e9943F39138;
+    uint256 public constant MINIMUM_BID = 10 ether;
+    address public constant CREATE2_FACTORY = 0x00000000000e974Fb8B2985Eb2fda6Dd13b90ACb;
 
     event NewBid(address indexed bidder, uint256 amount, bytes32 hash, uint8 zeros);
     event NewSolution(address indexed bidder, bytes32 hash, uint8 zeros, bytes32 solution);
@@ -76,8 +76,7 @@ contract Create2Mining {
     // @param initCodeHash The hash of the init code used to deploy the contract.
     // @return deploymentAddress The expected address of the deployed contract.
     function addressViaHash(bytes32 salt, bytes32 initCodeHash) public view returns (address deploymentAddress) {
-        address factory = address(CREATE2_FACTORY);
-        return ImmutableCreate2Factory(factory).findCreate2AddressViaHash(salt, initCodeHash);
+        return ImmutableCreate2Factory(CREATE2_FACTORY).findCreate2AddressViaHash(salt, initCodeHash);
     }
 
     // @dev Calculate the expected fee for a given number of leading zeros.
